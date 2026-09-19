@@ -20,8 +20,12 @@ GOOGLE_SCOPES = [
 ]
 
 
-def _feuille_google():
-    """Retourne le premier onglet de la Google Sheet configuree, ou None si absent."""
+CONNAISSANCE_ONGLET = "connaissance"
+CONNAISSANCE_EN_TETE = ["Direction", "Sujet", "Contenu", "Auteur", "Date"]
+
+
+def _classeur_google():
+    """Retourne le classeur (spreadsheet) Google configure, ou None si absent."""
     creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     sheet_id = os.environ.get("GOOGLE_SHEET_ID")
     if not (creds_json and sheet_id):
@@ -29,7 +33,31 @@ def _feuille_google():
     creds_info = json.loads(creds_json)
     creds = Credentials.from_service_account_info(creds_info, scopes=GOOGLE_SCOPES)
     client = gspread.authorize(creds)
-    return client.open_by_key(sheet_id).sheet1
+    return client.open_by_key(sheet_id)
+
+
+def _feuille_google():
+    """Retourne le premier onglet de la Google Sheet configuree, ou None si absent."""
+    classeur = _classeur_google()
+    return classeur.sheet1 if classeur else None
+
+
+def _feuille_connaissance():
+    """
+    Retourne l'onglet "connaissance" du classeur configure (le cree avec ses
+    en-tetes s'il n'existe pas encore), ou None si Google Sheets non configure.
+    """
+    classeur = _classeur_google()
+    if classeur is None:
+        return None
+    try:
+        return classeur.worksheet(CONNAISSANCE_ONGLET)
+    except gspread.exceptions.WorksheetNotFound:
+        onglet = classeur.add_worksheet(
+            title=CONNAISSANCE_ONGLET, rows=1000, cols=len(CONNAISSANCE_EN_TETE)
+        )
+        onglet.append_row(CONNAISSANCE_EN_TETE)
+        return onglet
 
 
 def envoyer_notification(sujet: str, message: str) -> str:
@@ -104,6 +132,57 @@ def mettre_a_jour_ligne_sheet(colonne_critere: str, valeur_critere: str, nouvell
             return f"Ligne {position} mise a jour : {nouvelles_valeurs}"
 
     return f"Aucune ligne trouvee ou '{colonne_critere}' = '{valeur_critere}'."
+
+
+def enregistrer_connaissance(direction: str, sujet: str, contenu: str, auteur: str) -> str:
+    """
+    Enregistre une information dans la base de connaissance de l'entreprise
+    (onglet "connaissance"), rattachee a une direction.
+    """
+    from datetime import datetime, timezone
+
+    onglet = _feuille_connaissance()
+    if onglet is None:
+        return (
+            "Base de connaissance non configuree : GOOGLE_SERVICE_ACCOUNT_JSON "
+            "et/ou GOOGLE_SHEET_ID sont absents cote serveur."
+        )
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    onglet.append_row([direction, sujet, contenu, auteur, date])
+    return f"Connaissance enregistree pour la direction '{direction}'."
+
+
+def rechercher_connaissance(direction: str = "", mot_cle: str = "") -> str:
+    """
+    Recherche dans la base de connaissance de l'entreprise, filtree par
+    direction et/ou mot-cle (recherche insensible a la casse dans le sujet
+    et le contenu). Laisser les deux vides pour tout retourner.
+    """
+    onglet = _feuille_connaissance()
+    if onglet is None:
+        return (
+            "Base de connaissance non configuree : GOOGLE_SERVICE_ACCOUNT_JSON "
+            "et/ou GOOGLE_SHEET_ID sont absents cote serveur."
+        )
+
+    lignes = onglet.get_all_records()  # liste de dicts, cles = en-tetes
+
+    direction_recherchee = direction.strip().lower()
+    mot_cle_recherche = mot_cle.strip().lower()
+
+    resultats = []
+    for ligne in lignes:
+        if direction_recherchee and direction_recherchee not in str(ligne.get("Direction", "")).lower():
+            continue
+        if mot_cle_recherche and mot_cle_recherche not in (
+            str(ligne.get("Sujet", "")).lower() + " " + str(ligne.get("Contenu", "")).lower()
+        ):
+            continue
+        resultats.append(ligne)
+
+    if not resultats:
+        return "Aucune connaissance trouvee pour ces criteres."
+    return json.dumps(resultats, ensure_ascii=False)
 
 
 TOOL_SCHEMAS = [
@@ -184,6 +263,61 @@ TOOL_SCHEMAS = [
             "required": ["colonne_critere", "valeur_critere", "nouvelles_valeurs"],
         },
     },
+    {
+        "name": "enregistrer_connaissance",
+        "description": (
+            "Enregistre une information dans la base de connaissance de "
+            "l'entreprise (le \"cerveau\"), rattachee a une direction "
+            "(ex: Marketing, Finance). A utiliser quand un manager decrit "
+            "un process, un outil, une priorite ou toute information "
+            "importante a memoriser pour sa direction."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "type": "string",
+                    "description": "Direction concernee (ex: Marketing, Finance).",
+                },
+                "sujet": {
+                    "type": "string",
+                    "description": "Titre court de l'information.",
+                },
+                "contenu": {
+                    "type": "string",
+                    "description": "Description detaillee de l'information.",
+                },
+                "auteur": {
+                    "type": "string",
+                    "description": "Nom ou identifiant de la personne qui fournit l'information.",
+                },
+            },
+            "required": ["direction", "sujet", "contenu", "auteur"],
+        },
+    },
+    {
+        "name": "rechercher_connaissance",
+        "description": (
+            "Recherche dans la base de connaissance de l'entreprise (le "
+            "\"cerveau\"), par direction et/ou mot-cle. A utiliser pour "
+            "repondre a une question sur l'entreprise ou pour onboarder "
+            "une nouvelle recrue en recuperant tout le contexte utile a "
+            "sa direction."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "type": "string",
+                    "description": "Direction a filtrer (optionnel, vide = toutes).",
+                },
+                "mot_cle": {
+                    "type": "string",
+                    "description": "Mot-cle a chercher dans le sujet/contenu (optionnel).",
+                },
+            },
+        },
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -191,4 +325,6 @@ TOOL_FUNCTIONS = {
     "ajouter_ligne_sheet": ajouter_ligne_sheet,
     "lire_donnees_sheet": lire_donnees_sheet,
     "mettre_a_jour_ligne_sheet": mettre_a_jour_ligne_sheet,
+    "enregistrer_connaissance": enregistrer_connaissance,
+    "rechercher_connaissance": rechercher_connaissance,
 }

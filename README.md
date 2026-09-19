@@ -70,8 +70,23 @@ adapte a un serveur webhook) :
 5. Renseignez `GOOGLE_SHEET_ID` avec l'identifiant de la feuille (dans son URL :
    `https://docs.google.com/spreadsheets/d/<ID>/edit`).
 
-Capacites disponibles : ajouter une ligne, lire toutes les lignes, mettre a
-jour une ligne selon une colonne/valeur de reference (voir `outils.py`).
+Capacites generiques disponibles : ajouter une ligne, lire toutes les lignes,
+mettre a jour une ligne selon une colonne/valeur de reference (voir
+`outils.py`).
+
+### Base de connaissance ("le cerveau")
+
+L'agent (Clemente) tient une base de connaissance d'entreprise dans un
+onglet dedie, `connaissance`, du meme classeur Google Sheets (cree
+automatiquement au premier usage avec les colonnes `Direction / Sujet /
+Contenu / Auteur / Date`). Deux outils dedies :
+- `enregistrer_connaissance` — un manager decrit un process/outil/priorite
+  en conversation libre, l'agent l'enregistre pour sa direction.
+- `rechercher_connaissance` — recupere les informations utiles par
+  direction et/ou mot-cle, notamment pour onboarder une nouvelle recrue.
+
+Le comportement exact (quand enregistrer, comment restituer) est defini
+dans `instructions.md`.
 
 ## Ajouter une nouvelle capacite
 
