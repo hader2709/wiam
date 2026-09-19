@@ -12,22 +12,27 @@ import os
 
 import resend
 
-RESEND_API_KEY = os.environ["RESEND_API_KEY"]
-NOTIFY_EMAIL_FROM = os.environ["NOTIFY_EMAIL_FROM"]
-NOTIFY_EMAIL_TO = os.environ["NOTIFY_EMAIL_TO"]
-
-resend.api_key = RESEND_API_KEY
-
 
 def envoyer_notification(sujet: str, message: str) -> str:
     """Envoie un email de notification a l'adresse fixe configuree dans .env."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    email_from = os.environ.get("NOTIFY_EMAIL_FROM")
+    email_to = os.environ.get("NOTIFY_EMAIL_TO")
+
+    if not (api_key and email_from and email_to):
+        return (
+            "Notification impossible : RESEND_API_KEY, NOTIFY_EMAIL_FROM "
+            "et/ou NOTIFY_EMAIL_TO ne sont pas configures cote serveur."
+        )
+
+    resend.api_key = api_key
     resend.Emails.send({
-        "from": NOTIFY_EMAIL_FROM,
-        "to": NOTIFY_EMAIL_TO,
+        "from": email_from,
+        "to": email_to,
         "subject": sujet,
         "text": message,
     })
-    return f"Notification envoyee a {NOTIFY_EMAIL_TO}."
+    return f"Notification envoyee a {email_to}."
 
 
 TOOL_SCHEMAS = [
