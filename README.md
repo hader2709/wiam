@@ -22,6 +22,7 @@ Remplissez `.env` avec :
 - `TELEGRAM_WEBHOOK_SECRET` (chaine aleatoire de votre choix)
 - `ANTHROPIC_API_KEY`
 - `RESEND_API_KEY`, `NOTIFY_EMAIL_FROM`, `NOTIFY_EMAIL_TO`
+- `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_SHEET_ID` (voir section Google Sheets ci-dessous)
 
 ```bash
 uvicorn main:app --reload
@@ -40,7 +41,8 @@ pour tester avant deploiement.
 4. Dans l'onglet "Environment" du service Render, renseignez les variables
    marquees `sync: false` dans `render.yaml` (jamais le fichier `.env` lui-meme) :
    `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`,
-   `RESEND_API_KEY`, `NOTIFY_EMAIL_FROM`, `NOTIFY_EMAIL_TO`.
+   `RESEND_API_KEY`, `NOTIFY_EMAIL_FROM`, `NOTIFY_EMAIL_TO`,
+   `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_SHEET_ID`.
 5. Une fois deploye, recuperez l'URL publique Render puis, en local :
    ```bash
    python definir_webhook.py https://votre-app.onrender.com
@@ -51,6 +53,25 @@ pour tester avant deploiement.
 Note : le plan gratuit Render met le service en veille apres inactivite ; le
 premier message apres une periode d'inactivite peut mettre quelques secondes
 de plus a repondre le temps que le service redemarre.
+
+## Google Sheets
+
+Cet agent utilise un **compte de service Google** (pas d'OAuth interactif,
+adapte a un serveur webhook) :
+
+1. Sur [console.cloud.google.com](https://console.cloud.google.com), activez
+   l'API "Google Sheets API", puis creez un compte de service
+   (Credentials -> Create Credentials -> Service Account).
+2. Generez une cle JSON pour ce compte (onglet "Keys" -> "Add Key" -> JSON).
+3. Copiez le contenu du fichier JSON tel quel (sur une seule ligne) dans
+   `GOOGLE_SERVICE_ACCOUNT_JSON`.
+4. Partagez votre Google Sheet (bouton "Partager") avec l'adresse
+   `client_email` presente dans ce JSON, en acces Editeur.
+5. Renseignez `GOOGLE_SHEET_ID` avec l'identifiant de la feuille (dans son URL :
+   `https://docs.google.com/spreadsheets/d/<ID>/edit`).
+
+Capacites disponibles : ajouter une ligne, lire toutes les lignes, mettre a
+jour une ligne selon une colonne/valeur de reference (voir `outils.py`).
 
 ## Ajouter une nouvelle capacite
 
